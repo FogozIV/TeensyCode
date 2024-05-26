@@ -1,0 +1,3 @@
+[submodule "lib/NetworkPacket"]
+	path = lib/NetworkPacket
+	url = https://github.com/FogozIV/NetworkPacket
