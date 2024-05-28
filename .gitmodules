@@ -1,3 +1,0 @@
-[submodule "lib/NetworkPacket"]
-	path = lib/NetworkPacket
-	url = git@github.com:FogozIV/NetworkPacket.git
