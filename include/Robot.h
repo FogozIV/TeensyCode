@@ -32,6 +32,10 @@ private:
     QuadEncoder* encoderRight = nullptr;
     bool sd_present = false;
     JsonDocument jsonData;
+
+    int32_t calibrationLeft;
+    int32_t calibrationRight;
+
 public:
     Robot(uint8_t pinA, uint8_t pinB, uint8_t pinA2, uint8_t pinB2, uint8_t channel1=1, uint8_t channel2=2);
 
@@ -47,7 +51,11 @@ public:
 
     void setLeftWheelDiam(double leftWheelDiam);
 
-    std::tuple<uint8_t*, size_t> getRawData();
+    std::vector<uint8_t> getRawData();
+
+    void calibration_went_forward(double distance);
+
+    void calibration_begin();
 private:
     void update_position();
 

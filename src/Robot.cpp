@@ -119,13 +119,44 @@ void Robot::setLeftWheelDiam(double leftWheelDiam) {
     }
 }
 
-std::tuple<uint8_t *, size_t> Robot::getRawData() {
+std::vector<uint8_t> Robot::getRawData() {
     size_t size = (3 + 2) * sizeof(double);
-    uint8_t *data = new uint8_t[size];
+    auto v = std::vector<uint8_t>(size);
+    uint8_t *data = v.data();
     *((double *) data) = position.getX();
     *((double *) (data + sizeof(double))) = position.getY();
     *((double *) (data + 2 * sizeof(double))) = position.getAngle();
     *((double *) (data + 3 * sizeof(double))) = evaluatedLeft;
     *((double *) (data + 4 * sizeof(double))) = evaluatedRight;
-    return std::make_tuple<>(data, size);
+    return v;
+}
+
+void Robot::calibration_went_forward(double distance) {
+    int32_t eLeft = encoderLeft->read();
+    int32_t eRight = encoderRight->read();
+
+    int32_t left = eLeft - calibrationLeft;
+    int32_t right = eRight - calibrationRight;
+    double left_d = left * left_wheel_diam;
+    double right_d = right * right_wheel_diam;
+    if(left_d < 0){
+        left_d *= -1;
+        left_wheel_diam *= -1;
+    }
+    if(right_d < 0){
+        right_d *= -1;
+        right_wheel_diam *= -1;
+    }
+    double corr = left_d/right_d;
+    right_wheel_diam *= corr;
+    right_d *= corr;
+    double c_distance = (left_d+right_d)/2;
+    corr = distance/c_distance;
+    left_wheel_diam *= corr;
+    right_wheel_diam *= corr;
+}
+
+void Robot::calibration_begin() {
+    calibrationLeft = encoderLeft->read();;
+    calibrationRight = encoderRight->read();;
 }

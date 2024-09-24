@@ -1,8 +1,6 @@
 #include <Arduino.h>
-#include "packet/Import.h"
 #include "utils/NetworkInitialiser.h"
 #include <MQTTPubSubClient.h>
-#include <sstream>
 #include "chrono"
 #include "Robot.h"
 
@@ -18,7 +16,6 @@ qindesign::network::EthernetClient client;
 MQTTPubSubClient mqttClient;
 //std::mutex networkMutex;
 
-uint64_t counter = 0;
 system_clock::time_point looping_time;
 Robot* robot;
 void setup(){
@@ -44,70 +41,70 @@ void setup(){
         size_t data_size = sizeof (double);
         robot->setPos(*((double*)data), *((double*)(data+data_size)), *((double*)(data+2*data_size)));
     });
-    mqttClient.subscribe("position_set_string", [](const String& str, size_t size){
-        std::stringstream ss(str.c_str());
-        double x, y, a;
-        ss >> x;
-        ss >> y;
-        ss >> a;
-        robot->setPos(x, y, a);
-    });
     mqttClient.subscribe("encoder_set", [](const String& str, size_t size){
         const char* data = str.begin();
         size_t data_size = sizeof (int32_t);
         robot->setEncoder(*((int32_t*)data), *((int32_t*)(data + data_size)));
     });
-    mqttClient.subscribe("encoder_set_string", [](const String& str, size_t size){
-       int32_t left, right;
-       std::stringstream ss(str.c_str());
-       ss >> left;
-       ss >> right;
-       robot->setEncoder(left, right);
-    });
     mqttClient.subscribe("encoder_left_set", [](const String& str, size_t size){
        const char* data = str.begin();
        robot->setLeftWheelDiam(*((double*)data));
-    });
-    mqttClient.subscribe("encoder_left_set_string", [](const String& str, size_t size){
-        double left_wheel_diam;
-        std::stringstream ss(str.c_str());
-        ss >> left_wheel_diam;
-        robot->setLeftWheelDiam(left_wheel_diam);
     });
     mqttClient.subscribe("encoder_right_set", [](const String& str, size_t size){
         const char* data = str.begin();
         robot->setRightWheelDiam(*((double*)data));
     });
-    mqttClient.subscribe("encoder_right_set_string", [](const String& str, size_t size){
-        double right_wheel_diam;
-        std::stringstream ss(str.c_str());
-        ss >> right_wheel_diam;
-        robot->setRightWheelDiam(right_wheel_diam);
-    });
     mqttClient.subscribe("encoder_track_set", [](const String& str, size_t size){
         const char* data = str.begin();
         robot->setTrackMm(*((double*)data));
     });
-    mqttClient.subscribe("encoder_track_set_string", [](const String& str, size_t size){
-        double track_mm;
-        std::stringstream ss(str.c_str());
-        ss >> track_mm;
-        robot->setTrackMm(track_mm);
+    mqttClient.subscribe("encoder_calibration", [](const String& str, size_t size){
+        robot->calibration_begin();
     });
+    mqttClient.subscribe("encoder_calibration_distance", [](const String& str, size_t size){
+        const char* data = str.begin();
+        robot->calibration_went_forward(*((double*)data));
+    });
+    mqttClient.subscribe("position_set_string", [](const String& str, size_t size){
+        JsonDocument json;
+        deserializeJson(json, str);
+        robot->setPos(json["x"].as<double>(), json["y"].as<double>(), json["a"].as<double>());
+    });
+    mqttClient.subscribe("encoder_set_string", [](const String& str, size_t size){
+        JsonDocument json;
+        deserializeJson(json, str);
+        robot->setEncoder(json["left"].as<int32_t>(), json["right"].as<int32_t>());
+    });
+    mqttClient.subscribe("encoder_left_set_string", [](const String& str, size_t size){
+        robot->setLeftWheelDiam(str.toFloat());
+    });
+    mqttClient.subscribe("encoder_right_set_string", [](const String& str, size_t size){
+        robot->setRightWheelDiam(str.toFloat());
+    });
+    mqttClient.subscribe("encoder_track_set_string", [](const String& str, size_t size){
+        robot->setTrackMm(str.toFloat());
+    });
+    mqttClient.subscribe("encoder_calibration_distance_string", [](const String& str, size_t size){
+        robot->calibration_went_forward(str.toFloat());
+    });
+
     /*mqttClient.subscribe("test/topic", [](const String& data, size_t size){
         Serial.println(data);
     });*/
 }
+
+
 void loop(){
     //networkMutex.lock();
     mqttClient.update();
     //networkMutex.unlock();
-    if(looping_time + 5ms >= system_clock::now()){
-        looping_time += 5ms;
+    if((looping_time + 5ms) <= system_clock::now()){
+        looping_time = system_clock::now();
         robot->update();
         auto data = robot->getRawData();
-        mqttClient.publish("position_data", std::get<0>(data), std::get<1>(data), false, 2);
+        mqttClient.publish("position_data", data.data(), data.size(), false, 0);
     }
+
     /*
     if(connected){
         if(millis() - previous_time >= 5){
