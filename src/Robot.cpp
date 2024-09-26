@@ -31,10 +31,18 @@ Robot::Robot(uint8_t pinA, uint8_t pinB, uint8_t pinA2, uint8_t pinB2, uint8_t c
     encoder2->setInitConfig();
     encoder1->init();
     encoder2->init();
-
-    encoderLeft = encoder1;
-    encoderRight = encoder2;
-
+    if(jsonData["inverse"].is<bool>()){
+        if(jsonData["inverse"].as<bool>()){
+            encoderLeft = encoder2;
+            encoderRight = encoder1;
+        }else{
+            encoderLeft = encoder1;
+            encoderRight = encoder2;
+        }
+    }else{
+        encoderLeft = encoder1;
+        encoderRight = encoder2;
+    }
     previous_encoder_left = encoderLeft->read();
     previous_encoder_right = encoderRight->read();
 
@@ -83,6 +91,7 @@ void Robot::setPos(double x, double y, double a) {
 }
 
 void Robot::setEncoder(int32_t left, int32_t right) {
+    Serial.printf("Setting left encoder to %d and right encoder to %d", left, right);
     previous_encoder_left = left;
     previous_encoder_right = right;
     encoderLeft->write(left);
@@ -126,8 +135,8 @@ std::vector<uint8_t> Robot::getRawData() {
     *((double *) data) = position.getX();
     *((double *) (data + sizeof(double))) = position.getY();
     *((double *) (data + 2 * sizeof(double))) = position.getAngle();
-    *((double *) (data + 3 * sizeof(double))) = evaluatedLeft;
-    *((double *) (data + 4 * sizeof(double))) = evaluatedRight;
+    *((double *) (data + 3 * sizeof(double))) = previous_encoder_left * left_wheel_diam;
+    *((double *) (data + 4 * sizeof(double))) = previous_encoder_right * right_wheel_diam;
     return v;
 }
 
@@ -154,9 +163,40 @@ void Robot::calibration_went_forward(double distance) {
     corr = distance/c_distance;
     left_wheel_diam *= corr;
     right_wheel_diam *= corr;
+    setLeftWheelDiam(left_wheel_diam);
+    setRightWheelDiam(right_wheel_diam);
 }
 
 void Robot::calibration_begin() {
     calibrationLeft = encoderLeft->read();;
     calibrationRight = encoderRight->read();;
+}
+
+void Robot::calibration_turned(double turns) {
+    int32_t eLeft = encoderLeft->read();
+    int32_t eRight = encoderRight->read();
+
+    int32_t left = eLeft - calibrationLeft;
+    int32_t right = eRight - calibrationRight;
+    double left_d = left * left_wheel_diam;
+    double right_d = right * right_wheel_diam;
+
+    double turned_distance = (right_d - left_d)/track_mm;
+
+    double real_turned_distance = turns * 2 * M_PI;
+
+    double mult = turned_distance/real_turned_distance;
+    if(mult < 0){
+        QuadEncoder* buffer = encoderLeft;
+        encoderLeft = encoderRight;
+        encoderRight = buffer;
+        if(sd_present){
+            jsonData["inverse"] = true;
+            File file = SD.open("encoder.json", FILE_WRITE_BEGIN);
+            serializeJson(jsonData, file);
+            file.close();
+        }
+        mult *= -1;
+    }
+    setTrackMm(track_mm*mult);
 }

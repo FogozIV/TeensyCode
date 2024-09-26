@@ -55,6 +55,8 @@ public:
 
     void calibration_went_forward(double distance);
 
+    void calibration_turned(double turns);
+
     void calibration_begin();
 private:
     void update_position();

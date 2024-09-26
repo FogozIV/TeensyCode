@@ -74,6 +74,7 @@ void setup(){
         JsonDocument json;
         deserializeJson(json, str);
         robot->setEncoder(json["left"].as<int32_t>(), json["right"].as<int32_t>());
+        Serial.println("Wrote encoder as string");
     });
     mqttClient.subscribe("encoder_left_set_string", [](const String& str, size_t size){
         robot->setLeftWheelDiam(str.toFloat());
@@ -87,13 +88,17 @@ void setup(){
     mqttClient.subscribe("encoder_calibration_distance_string", [](const String& str, size_t size){
         robot->calibration_went_forward(str.toFloat());
     });
+    mqttClient.subscribe("encoder_calibration_rotation_string", [](const String& str, size_t size){
+       robot->calibration_turned(str.toFloat());
+    });
 
     /*mqttClient.subscribe("test/topic", [](const String& data, size_t size){
         Serial.println(data);
     });*/
 }
 
-
+uint32_t counter = 0;
+uint32_t time_data = millis();
 void loop(){
     //networkMutex.lock();
     mqttClient.update();
@@ -103,6 +108,12 @@ void loop(){
         robot->update();
         auto data = robot->getRawData();
         mqttClient.publish("position_data", data.data(), data.size(), false, 0);
+        counter++;
+    }
+    if(millis() - time_data >= 1000){
+        time_data = millis();
+        Serial.println(counter);
+        counter = 0;
     }
 
     /*
